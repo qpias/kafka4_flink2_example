@@ -1,0 +1,68 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.0.1
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENERS: PLAINTEXT://:9092,PLAINTEXT_INTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # Flink JobManager - The coordinator of the Flink cluster
+  flink-jobmanager:
+    build:
+      context: ./flink_image
+    ports:
+      - "8081:8081" # Flink Web UI
+    command: jobmanager
+    init: true # Add init process for better signal handling and permission propagation
+    depends_on:
+      - kafka
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.memory.jvm-metaspace.size: 512m # Increase JVM Metaspace for PyFlink jobs
+    volumes:
+      - "./app:/app"
+      - "flink_jobmanager_data:/opt/flink/data"
+
+  # Flink TaskManager - The worker(s) of the Flink cluster
+  flink-taskmanager:
+    build:
+      context: ./flink_image
+    command: taskmanager
+    init: true # Add init process for better signal handling and permission propagation
+    depends_on:
+      - flink-jobmanager
+      - kafka
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 2
+        taskmanager.memory.jvm-metaspace.size: 512m # Increase JVM Metaspace for PyFlink jobs
+    volumes:
+      - "./app:/app"
+      - "flink_taskmanager_data:/opt/flink/data"
+
+# Volumes to persist data
+volumes:
+  kafka_data:
+    driver: local
+  flink_jobmanager_data:
+    driver: local
+  flink_taskmanager_data:
+    driver: local
