@@ -1,13 +1,14 @@
 services:
   kafka:
-    image: apache/kafka:4.0.0
+    image: apache/kafka:4.1.1
     ports:
       - "9092:9092"
     environment:
-      # KRaft settings
+      # KRaft settings (Kafka 4.0+ runs without Zookeeper)
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      # Dual listeners: PLAINTEXT for internal Docker network, EXTERNAL for host access
       KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:29093,EXTERNAL://:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
@@ -61,7 +62,8 @@ services:
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
-        taskmanager.numberOfTaskSlots: 2
+        # Increased to 4 slots to allow multiple Flink jobs to run concurrently
+        taskmanager.numberOfTaskSlots: 4
         taskmanager.memory.jvm-metaspace.size: 512m
     volumes:
       - "./app:/app"

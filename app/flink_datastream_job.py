@@ -65,7 +65,8 @@ def main():
     env = StreamExecutionEnvironment.get_execution_environment()
     env.enable_checkpointing(1000)  # Enable checkpointing for fault tolerance
 
-    # Kafka Source
+    # Migrated to KafkaSource (Flink 2.0+ standard) from legacy FlinkKafkaConsumer
+    # Uses internal Docker listener: kafka:29092
     kafka_source = KafkaSource.builder() \
         .set_bootstrap_servers("kafka:29092") \
         .set_topics("input_topic") \
@@ -94,7 +95,8 @@ def main():
         .map(lambda x: json.dumps(x), output_type=Types.STRING())
 
 
-    # Kafka Sink
+    # Migrated to KafkaSink (Flink 2.0+ standard) from legacy FlinkKafkaProducer
+    # Uses internal Docker listener: kafka:29092
     kafka_sink = KafkaSink.builder() \
         .set_bootstrap_servers("kafka:29092") \
         .set_record_serializer(
