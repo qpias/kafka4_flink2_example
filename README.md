@@ -1,6 +1,6 @@
 # Kafka and Flink End-to-End Example
 
-This project aims to provide a comprehensive, working local development setup for Kafka and Flink, leveraging Docker and Docker Compose for easy deployment and management. It serves as a practical demonstration of various Flink API layers, complete with Python scripts to generate sample events and observe processed results. The project uses **Apache Kafka 4.1.1** (KRaft mode) and **Apache Flink 2.2.0**.
+This project aims to provide a comprehensive, working local development setup for Kafka and Flink, leveraging Docker and Docker Compose for easy deployment and management. It serves as a practical demonstration of various Flink API layers, complete with Python scripts to generate sample events and observe processed results. The project uses **Apache Kafka 4.1.1** (KRaft mode) and **Apache Flink 2.2.0**. An older version of the project for Kafka 3 and Flink 1 can be found here: https://github.com/qpias/kafka3_flink1_example.
 
 The data pipeline showcases:
 1. A Kafka producer that sends messages to an `input_topic`.
