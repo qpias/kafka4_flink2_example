@@ -1,12 +1,14 @@
 # app/flink_datastream_job.py
 import json
 from pyflink.datastream import StreamExecutionEnvironment
-from pyflink.datastream.connectors.kafka import FlinkKafkaConsumer, FlinkKafkaProducer
+from pyflink.datastream.connectors.kafka import KafkaSource, KafkaSink, KafkaRecordSerializationSchema, DeliveryGuarantee
+from pyflink.datastream.connectors.kafka import KafkaOffsetsInitializer
 from pyflink.common.serialization import SimpleStringSchema
 from pyflink.common.typeinfo import Types
 from pyflink.datastream.functions import MapFunction, ReduceFunction
 from pyflink.common.time import Time
 from pyflink.datastream.window import TumblingProcessingTimeWindows
+from pyflink.common.watermark_strategy import WatermarkStrategy
 
 class JsonKeyedMapFunction(MapFunction):
     def map(self, value):
@@ -63,19 +65,18 @@ def main():
     env = StreamExecutionEnvironment.get_execution_environment()
     env.enable_checkpointing(1000)  # Enable checkpointing for fault tolerance
 
-    # Kafka Consumer
-    kafka_consumer = FlinkKafkaConsumer(
-        topics='input_topic',
-        deserialization_schema=SimpleStringSchema(),
-        properties={
-            'bootstrap.servers': 'kafka:29092',
-            'group.id': 'my_datastream_window_group',
-            'scan.startup.mode': 'latest-offset' # Start reading from the latest offset
-        }
-    )
+    # Migrated to KafkaSource (Flink 2.0+ standard) from legacy FlinkKafkaConsumer
+    # Uses internal Docker listener: kafka:29092
+    kafka_source = KafkaSource.builder() \
+        .set_bootstrap_servers("kafka:29092") \
+        .set_topics("input_topic") \
+        .set_group_id("my_datastream_window_group") \
+        .set_starting_offsets(KafkaOffsetsInitializer.latest()) \
+        .set_value_only_deserializer(SimpleStringSchema()) \
+        .build()
 
     # Add Kafka source to the environment
-    data_stream = env.add_source(kafka_consumer)
+    data_stream = env.from_source(kafka_source, WatermarkStrategy.no_watermarks(), "Kafka Source")
 
     # Apply the MapFunction to extract key and uppercase message
     keyed_stream = data_stream.map(JsonKeyedMapFunction(), output_type=Types.TUPLE([Types.STRING(), Types.MAP(Types.STRING(), Types.STRING())]))
@@ -94,15 +95,21 @@ def main():
         .map(lambda x: json.dumps(x), output_type=Types.STRING())
 
 
-    # Kafka Producer
-    kafka_producer = FlinkKafkaProducer(
-        topic='output_topic',
-        serialization_schema=SimpleStringSchema(),  # Serialize bytes as string
-        producer_config={'bootstrap.servers': 'kafka:29092'}
-    )
+    # Migrated to KafkaSink (Flink 2.0+ standard) from legacy FlinkKafkaProducer
+    # Uses internal Docker listener: kafka:29092
+    kafka_sink = KafkaSink.builder() \
+        .set_bootstrap_servers("kafka:29092") \
+        .set_record_serializer(
+            KafkaRecordSerializationSchema.builder()
+                .set_topic("output_topic")
+                .set_value_serialization_schema(SimpleStringSchema())
+                .build()
+        ) \
+        .set_delivery_guarantee(DeliveryGuarantee.AT_LEAST_ONCE) \
+        .build()
 
     # Add Kafka sink to the environment
-    windowed_stream.add_sink(kafka_producer)
+    windowed_stream.sink_to(kafka_sink)
 
     # Execute the Flink job
     env.execute("Flink DataStream Window Example")

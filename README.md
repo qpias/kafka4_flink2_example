@@ -1,6 +1,6 @@
 # Kafka and Flink End-to-End Example
 
-This project aims to provide a comprehensive, working local development setup for Kafka and Flink, leveraging Docker and Docker Compose for easy deployment and management. It serves as a practical demonstration of various Flink API layers, complete with Python scripts to generate sample events and observe processed results.
+This project aims to provide a comprehensive, working local development setup for Kafka and Flink, leveraging Docker and Docker Compose for easy deployment and management. It serves as a practical demonstration of various Flink API layers, complete with Python scripts to generate sample events and observe processed results. The project uses **Apache Kafka 4.1.1** (KRaft mode) and **Apache Flink 2.2.0**.
 
 The data pipeline showcases:
 1. A Kafka producer that sends messages to an `input_topic`.
@@ -11,7 +11,7 @@ The data pipeline showcases:
 
 This project showcases different levels of abstraction available in Apache Flink's Python API, demonstrating how to approach stream processing tasks with varying degrees of control and complexity:
 
-*   **Table API (`flink_job.py`):** This is the highest-level API, offering a SQL-like or relational-style approach to stream processing. It's ideal for defining transformations on tabular data streams using declarative queries. The `flink_job.py` example uses the Table API to read from Kafka, apply a simple `UPPER` case conversion to a column, and write to another Kafka topic, much like a database query on a continuous stream.
+*   **Table API (`flink_table_job.py`):** This is the highest-level API, offering a SQL-like or relational-style approach to stream processing. It's ideal for defining transformations on tabular data streams using declarative queries. The `flink_table_job.py` example uses the Table API to read from Kafka, apply a simple `UPPER` case conversion to a column, and write to another Kafka topic, much like a database query on a continuous stream.
 
 *   **DataStream API (`flink_datastream_job.py`):** This is the core API for stream processing in Flink, providing more control over state and time compared to the Table API. It's suitable for complex event processing, windowing, and custom stateful operations. The `flink_datastream_job.py` example utilizes the DataStream API to implement windowing logic, where messages are grouped over a specific time period, and a custom `ReduceFunction` aggregates these messages and their counts.
 
@@ -19,33 +19,49 @@ This project showcases different levels of abstraction available in Apache Flink
 
 These examples provide a comprehensive overview of Flink's capabilities, from high-level declarative processing to highly customized stateful and time-sensitive operations.
 
+---
+
 ## Prerequisites
-- Docker and Docker Compose
-- Python 3
 
-## Instructions
+- [Docker](https://www.docker.com/products/docker-desktop) and [Docker Compose](https://docs.docker.com/compose/install/)
+- Python 3.x installed locally (for running the producer and consumer)
+- `curl` (to download the Flink connector)
 
-### 1. Start the services
+## Getting Started
 
-Start the ZooKeeper, Kafka, and Flink services using Docker Compose. This configuration uses ZooKeeper for Kafka coordination, which is a highly stable and reliable setup.
+### 1. Start Kafka and Flink Services
+
+Run the following command to build the Flink image and start the cluster:
 ```bash
 docker-compose up -d --build
 ```
 
-### 2. Create Kafka topics
+Once the services are active, you can manage the cluster using either the provided Web UIs or the command line tools mentioned below:
 
-Create the `input_topic` and `output_topic` for the Kafka broker. We will connect to ZooKeeper to create the topics.
+*   **Flink Web UI** ([http://localhost:8081](http://localhost:8081)): Monitor job progress, view taskmanager logs, inspect execution graphs, and manually cancel jobs.
+*   **Kafka UI** ([http://localhost:8080](http://localhost:8080)): Inspect message payloads in real-time, browse topics, and check consumer group lag without using CLI commands.
 
+### 2. Create Kafka Topics
+
+Create the input and output topics required for the exercise:
 ```bash
-docker-compose exec kafka /bin/kafka-topics --create --topic input_topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
-docker-compose exec kafka /bin/kafka-topics --create --topic output_topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+docker-compose exec kafka /opt/kafka/bin/kafka-topics.sh --create --topic input_topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+docker-compose exec kafka /opt/kafka/bin/kafka-topics.sh --create --topic output_topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
 ```
 
-### 3. Install Python dependencies
+### 3. Install Local Python Dependencies
 
-Install the required Python libraries. It is recommended to use a virtual environment.
+Install the required Kafka Python client:
 ```bash
-pip3 install kafka-python apache-flink
+pip install kafka-python-ng
+```
+
+### 4. Download Flink Connector
+
+Create a directory for the connector and download the required Kafka connector JAR for Flink 2.2.0:
+```bash
+mkdir -p app/lib
+curl -o app/lib/flink-sql-connector-kafka-4.0.1-2.0.jar https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.1-2.0/flink-sql-connector-kafka-4.0.1-2.0.jar
 ```
 
 ### 4. Run the application
@@ -54,39 +70,27 @@ The application consists of three parts: a producer, a Flink job, and a consumer
 
 #### a. Submit the Flink Table API job
 
-The Flink job will run in the background, waiting for messages. You need to submit the Python Flink job to the Flink cluster. To do this, you need the Flink Python connector jars.
-
-**Note:** The producer and consumer scripts, along with the Flink job, have been updated to use JSON formatted messages. The producer sends JSON objects with a "message" field, and the consumer expects to parse these JSON objects.
-
-First, download the necessary jar to your local `app/lib` directory:
+Submit the Table API job using `docker-compose exec`:
 ```bash
-mkdir -p app/lib
-curl -o app/lib/flink-sql-connector-kafka-3.1.0-1.18.jar https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.1.0-1.18/flink-sql-connector-kafka-3.1.0-1.18.jar
+docker-compose exec flink-jobmanager ./bin/flink run -py /app/flink_table_job.py -j /app/lib/flink-sql-connector-kafka-4.0.1-2.0.jar
 ```
-
-Now, submit the job using `docker-compose exec`:
-```bash
-docker-compose exec flink-jobmanager flink run -py /app/flink_job.py -j /app/lib/flink-sql-connector-kafka-3.1.0-1.18.jar
-```
-
-This command will submit the job, and it will run indefinitely, processing data. You can view the running job in the Flink Web UI at [http://localhost:8081](http://localhost:8081).
 
 #### b. Submit the Flink DataStream API job
 
-To run the DataStream API example, first ensure no other Flink job is running. You can cancel a running job from the Flink Web UI (http://localhost:8081) or by restarting the Flink services (`docker-compose up -d --build --force-recreate`).
+To run the DataStream API example, first ensure no other Flink job is running. `flink_datastream_job.py` uses the new `KafkaSource` and `KafkaSink` APIs.
 
-Then, submit the job using `docker-compose exec`:
+Submit the job using `docker-compose exec`:
 ```bash
-docker-compose exec flink-jobmanager flink run -py /app/flink_datastream_job.py -j /app/lib/flink-sql-connector-kafka-3.1.0-1.18.jar
+docker-compose exec flink-jobmanager ./bin/flink run -py /app/flink_datastream_job.py -j /app/lib/flink-sql-connector-kafka-4.0.1-2.0.jar
 ```
 
 #### c. Submit the Flink ProcessFunction job
 
-To run the ProcessFunction example, first ensure no other Flink job is running. You can cancel a running job from the Flink Web UI (http://localhost:8081) or by restarting the Flink services (`docker-compose up -d --build --force-recreate`).
+To run the ProcessFunction example:
 
-Then, submit the job using `docker-compose exec`:
 ```bash
-docker-compose exec flink-jobmanager flink run -py /app/flink_process_function_job.py -j /app/lib/flink-sql-connector-kafka-3.1.0-1.18.jar
+docker-compose exec flink-jobmanager ./bin/flink run -py /app/flink_process_function_job.py -j /app/lib/flink-sql-connector-kafka-4.0.1-2.0.jar
+```
 
 #### d. Run the consumer
 
@@ -102,9 +106,54 @@ Open another new terminal and run the producer script. This will send messages t
 python3 app/producer.py
 ```
 
-You should see the original messages in the producer terminal and the aggregated window results in the consumer terminal when running the DataStream API job. For the Table API and ProcessFunction jobs, you will see the individual processed messages.
+You should see the original messages in the producer terminal and the processed results appearing in the consumer terminal as the Flink jobs transform the stream.
 
-### 5. Clean up
+### 5. Managing Flink Jobs
+
+You can monitor and manage your Flink jobs via the **Flink Web UI** or the command line.
+
+**List all running jobs and their IDs:**
+```bash
+docker-compose exec flink-jobmanager ./bin/flink list
+```
+
+**Cancel a running job (immediate):**
+```bash
+docker-compose exec flink-jobmanager ./bin/flink cancel <JOB_ID>
+```
+
+**Stop a job gracefully (creating a savepoint):**
+```bash
+docker-compose exec flink-jobmanager ./bin/flink stop <JOB_ID>
+```
+
+**Cancel all running jobs:**
+```bash
+docker-compose exec flink-jobmanager /bin/bash -c "./bin/flink list -r | awk '{print \$4}' | xargs -I {} ./bin/flink cancel {}"
+```
+
+### 6. Managing Consumer Groups
+
+In Kafka, consumers are always part of a **Consumer Group**. This allows multiple consumers to share the workload of processing a topic and ensures that messages are tracked correctly. The consumer script uses a stable group ID (`flink-example-consumer-group`) so it can resume from the last committed offset if restarted.
+
+You can monitor group health via the **Kafka UI** or the CLI.
+
+**List active consumer groups:**
+```bash
+docker-compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+```
+
+**Describe a specific group (to see offsets and lag):**
+```bash
+docker-compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group flink-example-consumer-group
+```
+
+**Delete unused (orphan) groups:**
+```bash
+docker-compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --delete --group <group-id-to-delete>
+```
+
+### 7. Clean up
 
 To stop the services and remove the containers, run:
 ```bash

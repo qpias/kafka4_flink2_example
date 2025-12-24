@@ -1,4 +1,4 @@
-# app/flink_job.py
+# app/flink_table_job.py
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import StreamTableEnvironment, DataTypes
 from pyflink.table.udf import udf
@@ -20,7 +20,7 @@ def main():
         ) WITH (
             'connector' = 'kafka',
             'topic' = 'input_topic',
-            'properties.bootstrap.servers' = 'kafka:29092',
+            'properties.bootstrap.servers' = 'kafka:29092', -- Internal Docker listener
             'scan.startup.mode' = 'latest-offset',
             'format' = 'json'
         )
@@ -33,7 +33,7 @@ def main():
         ) WITH (
             'connector' = 'kafka',
             'topic' = 'output_topic',
-            'properties.bootstrap.servers' = 'kafka:29092',
+            'properties.bootstrap.servers' = 'kafka:29092', -- Internal Docker listener
             'format' = 'json'
         )
     """)
