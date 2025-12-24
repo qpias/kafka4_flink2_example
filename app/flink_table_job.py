@@ -1,4 +1,4 @@
-# app/flink_job.py
+# app/flink_table_job.py
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import StreamTableEnvironment, DataTypes
 from pyflink.table.udf import udf
