@@ -1,12 +1,12 @@
-FROM apache/flink:2.2.0-java17
+FROM apache/flink:2.2.0-java21
 
 # Switch to root user to install packages
 USER root
 
 # Install python3 and pip
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip openjdk-17-jdk && \
-    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64 && \
+    apt-get install -y python3 python3-pip openjdk-21-jdk && \
+    export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-arm64 && \
     # --break-system-packages is required for Flink 2.2.0 (based on Ubuntu 24.04+) 
     # to bypass PEP 668 ("externally managed environment") error.
     pip3 install apache-flink==2.2.0 --break-system-packages && \
